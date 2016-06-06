@@ -29,6 +29,8 @@ HMENU MakeMenu             ();
 void  SelectText           (HWND hwnd, UINT index);
 void  PasteText            ();
 UINT  PopupMenu            (HWND hwnd);
+void  LoadClipLog          ();
+void  SaveClipLog          ();
 
 //---------------------------------------------------------------------------//
 

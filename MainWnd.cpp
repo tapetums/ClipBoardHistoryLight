@@ -1,6 +1,4 @@
-﻿#pragma once
-
-//---------------------------------------------------------------------------//
+﻿//---------------------------------------------------------------------------//
 //
 // MainWnd.cpp
 //  メインウィンドウ
@@ -13,6 +11,9 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <strsafe.h>
+
+#include <shlwapi.h>
+#pragma comment(lib, "shlwapi.lib")
 
 #include "deque.hpp"
 
@@ -75,6 +76,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_CREATE:        { return OnCreate(hwnd); }
         case WM_DESTROY:       { return OnDestroy(hwnd); }
         case WM_CLOSE:         { return 0; }
+        case WM_ENDSESSION:    { SaveClipLog(); return 0; }
         case WM_COMMAND:       { return OnCommand(hwnd, LOWORD(wp)); }
         case WM_DRAWCLIPBOARD: { return OnDrawClipboard(hwnd); }
         case WM_CHANGECBCHAIN: { return OnChangeCBChain(hwnd, HWND(wp), HWND(lp)); }
@@ -114,16 +116,18 @@ LRESULT CALLBACK OnCreate(HWND hwnd)
         g_max_item = 50;
     }
 
-    if ( g_enabled )
-    {
-        CheckMenu(CMD_SWITCH, g_enabled);
-        SwitchClipboardViewer(hwnd, g_enabled);
-    }
+    // クリップボード監視の開始
+    CheckMenu(CMD_SWITCH, g_enabled);
+    SwitchClipboardViewer(hwnd, g_enabled);
 
+    // クリップボード履歴を作成
     if ( nullptr == clipboard_log )
     {
         clipboard_log = new tapetums::deque<tapetums::wstring>();
     }
+
+    // クリップボード履歴の読み込み
+    LoadClipLog();
 
     return 0;
 }
@@ -132,11 +136,16 @@ LRESULT CALLBACK OnCreate(HWND hwnd)
 
 LRESULT CALLBACK OnDestroy(HWND hwnd)
 {
+    // クリップボード履歴の書き出し
+    SaveClipLog();
+
+    // クリップボード履歴を破棄
     if ( clipboard_log )
     {
         delete clipboard_log; clipboard_log = nullptr;
     }
 
+    // クリップボード監視の停止
     SwitchClipboardViewer(hwnd, false);
 
     return 0;
@@ -326,6 +335,8 @@ void MakeMenuString
 // コンテクストメニューを生成する
 HMENU MakeMenu()
 {
+    if ( nullptr == clipboard_log ) { return nullptr; }
+
     std::array<wchar_t, MAX_PATH> buf;
 
     auto hMenu = ::LoadMenu(g_hInst, MAKEINTRESOURCE(101));
@@ -369,6 +380,8 @@ HMENU MakeMenu()
 // クリップボードの履歴順を入れ替える
 void SelectText(HWND hwnd, UINT index)
 {
+    if ( nullptr == clipboard_log ) { return; }
+
     UINT i = 1; // 選択なしを 0 として扱うため 先頭を 1 にする
 
     for ( auto && str: *clipboard_log )
@@ -474,6 +487,115 @@ UINT PopupMenu(HWND hwnd)
     }
 
     return index;
+}
+
+//---------------------------------------------------------------------------//
+
+// クリップボードの履歴を読み込む
+void LoadClipLog()
+{
+    if ( nullptr == clipboard_log ) { return; }
+
+    TCHAR path   [MAX_PATH];
+    TCHAR dirpath[MAX_PATH];
+    TCHAR logname[MAX_PATH];
+
+    const auto len = ::GetModuleFileName(g_hInst, path, MAX_PATH);
+    for ( auto i = len - 1; i > 0; --i )
+    {
+        if ( path[i] == '\\' )
+        {
+            path[i] = '\0'; break;
+        }
+    }
+    wsprintf(dirpath, TEXT(R"(%s\history)"), path);
+
+    for ( UINT idx = 1; idx <= 50; ++idx )
+    {
+        wsprintf(logname, TEXT(R"(%s\%03u.txt)"), dirpath, idx);
+        const auto file = ::CreateFile
+        (
+            logname, GENERIC_READ, 0, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr
+        );
+        if ( file == INVALID_HANDLE_VALUE )
+        {
+            break;
+        }
+
+        const auto size = ::GetFileSize(file, nullptr); // 4GiB 以上は無視
+        auto str = new wchar_t[size / sizeof(wchar_t) + 1];
+
+        DWORD cb;
+        ::ReadFile(file, str, size, &cb, nullptr);
+        str[cb / sizeof(wchar_t)] = L'\0';
+
+        clipboard_log->push_back(tapetums::wstring(str));
+
+        ::CloseHandle(file);
+    }
+}
+
+//---------------------------------------------------------------------------//
+
+// クリップボードの履歴を書き出す
+void SaveClipLog()
+{
+    if ( nullptr == clipboard_log ) { return; }
+
+    TCHAR path   [MAX_PATH];
+    TCHAR dirpath[MAX_PATH];
+    TCHAR logname[MAX_PATH];
+
+    const auto len = ::GetModuleFileName(g_hInst, path, MAX_PATH);
+    for ( auto i = len - 1; i > 0; --i )
+    {
+        if ( path[i] == '\\' )
+        {
+            path[i] = '\0';
+            break;
+        }
+    }
+    wsprintf(dirpath, TEXT(R"(%s\history)"), path);
+
+    if ( !::PathIsDirectory(dirpath) )
+    {
+        ::CreateDirectory(dirpath, nullptr);
+    }
+    else
+    {
+        // 既存の履歴ファイルを消去
+        for ( UINT idx = 1; ; ++idx )
+        {
+            wsprintf(logname, TEXT(R"(%s\%03u.txt)"), dirpath, idx);
+            if ( ! ::DeleteFile(logname) )
+            {
+                break;
+            }
+        }
+    }
+
+    UINT idx = 1;
+    for ( auto&& str: *clipboard_log )
+    {
+        wsprintf(logname, TEXT(R"(%s\%03u.txt)"), dirpath, idx);
+        const auto file = ::CreateFile
+        (
+            logname, GENERIC_WRITE, 0, nullptr,
+            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr
+        );
+        if ( file == INVALID_HANDLE_VALUE )
+        {
+            break;
+        }
+
+        DWORD cb;
+        const DWORD size = sizeof(wchar_t) * lstrlenW(str.c_str());
+        ::WriteFile(file, str.c_str(), size, &cb, nullptr);
+        ::CloseHandle(file);
+
+        ++idx;
+    }
 }
 
 //---------------------------------------------------------------------------//
