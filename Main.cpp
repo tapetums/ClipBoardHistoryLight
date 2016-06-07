@@ -52,14 +52,14 @@ PLUGIN_COMMAND_INFO g_cmd_info[] =
         0                                                      // TimerCounter（未使用）
     },
     {
-        TEXT("Show ClipBoardExt Menu"),             // コマンド名（英名）
-        TEXT("クリップボード履歴のメニューを表示"), // コマンド説明（日本語）
-        CMD_MENU,                                   // コマンドID
-        0,                                          // Attr（未使用）
-        -1,                                         // ResTd(未使用）
-        DISPMENU(dmSystemMenu | dmHotKeyMenu),      // DispMenu
-        0,                                          // TimerInterval[msec] 0で使用しない
-        0                                           // TimerCounter（未使用）
+        TEXT("Show ClipBoard History"),        // コマンド名（英名）
+        TEXT("クリップボード履歴を表示"),      // コマンド説明（日本語）
+        CMD_MENU,                              // コマンドID
+        0,                                     // Attr（未使用）
+        -1,                                    // ResTd(未使用）
+        DISPMENU(dmSystemMenu | dmHotKeyMenu), // DispMenu
+        0,                                     // TimerInterval[msec] 0で使用しない
+        0                                      // TimerCounter（未使用）
     },
 };
 
