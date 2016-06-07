@@ -173,8 +173,6 @@ LRESULT CALLBACK OnCommand(HWND hwnd, INT32 CmdID)
         const auto hwnd_target = ::GetForegroundWindow();
         const auto hwnd_focus  = ::GetFocus();
         ::AttachThreadInput(tThId, cThId, FALSE);
-        //WriteLog(elDebug, TEXT("%s: hwnd_target = %p"), PLUGIN_NAME, hwnd_target);
-        //WriteLog(elDebug, TEXT("%s: hwnd_focus  = %p"), PLUGIN_NAME, hwnd_focus);
 
         const auto index = PopupMenu(hwnd);
 
@@ -214,10 +212,8 @@ LRESULT CALLBACK OnDrawClipboard(HWND hwnd)
             const auto end = clipboard_log->end();
             for ( auto it = clipboard_log->begin(); it != end; ++it )
             {
-                //WriteLog(elDebug, TEXT("%s, %s"), p, it->c_str());
                 if ( 0 == lstrcmpW(p, it->c_str()) )
                 {
-                    //WriteLog(elDebug, TEXT("erase"));
                     clipboard_log->erase(it);
                     break;
                 }
@@ -229,7 +225,6 @@ LRESULT CALLBACK OnDrawClipboard(HWND hwnd)
             {
                 clipboard_log->pop_back(); // 一番古い履歴を消去
             }
-            //WriteLog(elDebug, TEXT("%u"), clipboard_log->size());
 
             ::GlobalUnlock(hText);
         }
@@ -366,7 +361,7 @@ HMENU MakeMenu()
         ++index;
     }
 
-    // セパレータの位置を移動
+    // ダミーのセパレータを削除
     //  メニューリソースでは項目が予め最低一つないと
     //  メニューが表示されないバグがあるため、
     //  最初にダミーとして一つセパレータを入れてある
@@ -384,7 +379,7 @@ void SelectText(HWND hwnd, UINT index)
 
     UINT i = 1; // 選択なしを 0 として扱うため 先頭を 1 にする
 
-    for ( auto && str: *clipboard_log )
+    for ( auto&& str: *clipboard_log )
     {
         if ( i == index )
         {
@@ -478,8 +473,6 @@ UINT PopupMenu(HWND hwnd)
     // Article ID: Q135788
     // ポップアップメニューから処理を戻すために必要
     ::PostMessage(hwnd, WM_NULL, 0, 0);
-
-    //WriteLog(elDebug, TEXT("%s: index = %u"), PLUGIN_NAME, index);
 
     if ( index > 1 ) // index == 1 の時は入れ替え作業は必要なし
     {
